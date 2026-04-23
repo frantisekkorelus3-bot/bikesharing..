@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sdílená kola · Plzeň</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0d0f0e;
+    --surface: #161a18;
+    --card: #1c2220;
+    --border: #2a3330;
+    --accent: #4ade80;
+    --accent2: #86efac;
+    --warn: #facc15;
+    --red: #f87171;
+    --text: #e8ede9;
+    --muted: #6b7c71;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: rgba(13,15,14,.92);
+    backdrop-filter: blur(12px);
+    z-index: 1000;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .logo-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    letter-spacing: .06em;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .logo-sub {
+    font-size: .75rem;
+    color: var(--muted);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: .75rem;
+    color: var(--muted);
+    letter-spacing: .06em;
+  }
+
+  .pulse-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .4; transform: scale(.7); }
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: calc(100vh - 65px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-top {
+    padding: 20px 20px 0;
+    flex-shrink: 0;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    line-height: 1;
+    color: var(--accent);
+  }
+
+  .stat-label {
+    font-size: .65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-top: 4px;
+  }
+
+  /* Search */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+    font-size: 1rem;
+  }
+
+  #search {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: .875rem;
+    font-weight: 300;
+    padding: 10px 12px 10px 36px;
+    outline: none;
+    transition: border-color .2s;
+  }
+
+  #search:focus { border-color: var(--accent); }
+  #search::placeholder { color: var(--muted); }
+
+  /* Filter chips */
+  .filter-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+    font-family: var(--font-body);
+  }
+
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+
+  .list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 0 8px;
+    font-size: .7rem;
+    color: var(--muted);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+
+  /* Station list */
+  .station-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 20px 20px;
+  }
+
+  .station-list::-webkit-scrollbar { width: 4px; }
+  .station-list::-webkit-scrollbar-track { background: transparent; }
+  .station-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .station-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 8px;
+    cursor: pointer;
+    transition: all .15s;
+    animation: fadeIn .25s ease forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .station-item:hover {
+    border-color: var(--accent);
+    background: #1f2b25;
+  }
+
+  .station-item.selected {
+    border-color: var(--accent);
+    background: #1a2e22;
+  }
+
+  .station-name {
+    font-size: .9rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  .station-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .bikes-bar-wrap {
+    flex: 1;
+    height: 5px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .bikes-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .5s ease;
+  }
+
+  .tag {
+    font-size: .65rem;
+    font-weight: 500;
+    letter-spacing: .08em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .tag-green { background: rgba(74,222,128,.15); color: var(--accent); }
+  .tag-yellow { background: rgba(250,204,21,.15); color: var(--warn); }
+  .tag-red { background: rgba(248,113,113,.15); color: var(--red); }
+
+  .bikes-count {
+    font-size: .7rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* ── Map ── */
+  #map {
+    width: 100%;
+    height: 100%;
+    background: #0d0f0e;
+  }
+
+  /* Leaflet dark overrides */
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.75) saturate(.6); }
+  .leaflet-container { background: var(--bg); }
+
+  /* Custom marker */
+  .bike-marker {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display);
+    font-size: 1rem;
+    border: 2px solid;
+    transition: transform .2s;
+    box-shadow: 0 2px 12px rgba(0,0,0,.5);
+  }
+
+  .bike-marker.high { background: rgba(74,222,128,.9); border-color: #22c55e; color: #052e16; }
+  .bike-marker.mid  { background: rgba(250,204,21,.9); border-color: #eab308; color: #422006; }
+  .bike-marker.low  { background: rgba(248,113,113,.9); border-color: #ef4444; color: #450a0a; }
+  .bike-marker.empty { background: rgba(30,30,30,.9); border-color: #4b5563; color: #9ca3af; }
+
+  /* Popup */
+  .leaflet-popup-content-wrapper {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  }
+  .leaflet-popup-tip { background: var(--card); }
+  .leaflet-popup-close-button { color: var(--muted) !important; }
+
+  .popup-body { padding: 4px; min-width: 180px; }
+  .popup-name { font-weight: 500; font-size: .95rem; margin-bottom: 10px; }
+  .popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .popup-stat { background: var(--surface); border-radius: 8px; padding: 8px; text-align: center; }
+  .popup-stat-val { font-family: var(--font-display); font-size: 1.4rem; line-height: 1; }
+  .popup-stat-val.green { color: var(--accent); }
+  .popup-stat-val.gray { color: var(--muted); }
+  .popup-stat-lbl { font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 3px; }
+  .popup-renting { margin-top: 8px; font-size: .72rem; text-align: center; color: var(--muted); }
+
+  /* Loading */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 200px; flex-direction: column; gap: 12px;
+    color: var(--muted); font-size: .85rem;
+  }
+
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    text-align: center; padding: 20px;
+    color: var(--red); font-size: .8rem;
+  }
+
+  /* Refresh button */
+  .refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: .7rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    transition: all .15s;
+  }
+
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: 45vh 1fr; }
+    #map { height: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-title">🚲 Kola Plzeň</span>
+    <span class="logo-sub">Sdílená kola PMDP</span>
+  </div>
+  <div class="status-badge">
+    <div class="pulse-dot" id="liveDot"></div>
+    <span id="lastUpdate">Načítání…</span>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value" id="statStations">–</div>
+          <div class="stat-label">Stanic</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statBikes">–</div>
+          <div class="stat-label">Kol</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statDocks">–</div>
+          <div class="stat-label">Stojany</div>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="search" placeholder="Hledat stanici…" autocomplete="off">
+      </div>
+
+      <div class="filter-row">
+        <button class="chip active" data-filter="all">Vše</button>
+        <button class="chip" data-filter="high">Dostupná</button>
+        <button class="chip" data-filter="low">Málo kol</button>
+        <button class="chip" data-filter="empty">Prázdná</button>
+      </div>
+
+      <div class="list-header">
+        <span id="listCount">Stanice</span>
+        <button class="refresh-btn" id="refreshBtn">↻ Obnovit</button>
+      </div>
+    </div>
+
+    <div class="station-list" id="stationList">
+      <div class="loading"><div class="spinner"></div>Načítám stanice…</div>
+    </div>
+  </aside>
+
+  <div id="map"></div>
+</div>
+
+<script>
+  const API = 'https://api.adamhojer.cz/kolo';
+  let allStations = [];
+  let detailCache = {};
+  let map, markers = {};
+  let activeFilter = 'all';
+  let searchTerm = '';
+  let selectedId = null;
+
+  // Init map centered on Plzeň
+  map = L.map('map', { zoomControl: true }).setView([49.7384, 13.3736], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(map);
+
+  function getBikeColor(available, capacity) {
+    if (!capacity || available === 0) return 'empty';
+    const ratio = available / capacity;
+    if (ratio > 0.4) return 'high';
+    if (ratio > 0.15) return 'mid';
+    return 'low';
+  }
+
+  function getBarColor(available, capacity) {
+    if (!capacity || available === 0) return '#4b5563';
+    const ratio = available / capacity;
+    if (ratio > 0.4) return '#4ade80';
+    if (ratio > 0.15) return '#facc15';
+    return '#f87171';
+  }
+
+  function getTag(available, capacity) {
+    if (!capacity || available === 0) return ['tag-red', 'Prázdná'];
+    const ratio = available / capacity;
+    if (ratio > 0.4) return ['tag-green', `${available} kol`];
+    if (ratio > 0.15) return ['tag-yellow', `${available} kol`];
+    return ['tag-red', `${available} kol`];
+  }
+
+  function createMarkerIcon(available, capacity) {
+    const cls = getBikeColor(available, capacity);
+    const label = available ?? '?';
+    return L.divIcon({
+      html: `<div class="bike-marker ${cls}">${label}</div>`,
+      className: '',
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -20]
+    });
+  }
+
+  async function fetchStations() {
+    const res = await fetch(`${API}/stations`);
+    if (!res.ok) throw new Error('API error');
+    return res.json();
+  }
+
+  async function fetchDetail(id) {
+    if (detailCache[id] && (Date.now() - detailCache[id].ts < 120000)) {
+      return detailCache[id].data;
+    }
+    const res = await fetch(`${API}/stations/${id}`);
+    if (!res.ok) throw new Error('Detail error');
+    const data = await res.json();
+    detailCache[id] = { data, ts: Date.now() };
+    return data;
+  }
+
+  async function loadAllDetails(stations) {
+    const details = await Promise.allSettled(stations.map(s => fetchDetail(s.id)));
+    return stations.map((s, i) => {
+      const d = details[i].status === 'fulfilled' ? details[i].value : s;
+      return { ...s, ...d };
+    });
+  }
+
+  function renderStats(stations) {
+    const total = stations.length;
+    const bikes = stations.reduce((a, s) => a + (s.bikesAvailable ?? 0), 0);
+    const docks = stations.reduce((a, s) => a + (s.docksAvailable ?? 0), 0);
+    document.getElementById('statStations').textContent = total;
+    document.getElementById('statBikes').textContent = bikes;
+    document.getElementById('statDocks').textContent = docks;
+  }
+
+  function filterStations(stations) {
+    return stations.filter(s => {
+      const nameMatch = s.name.toLowerCase().includes(searchTerm);
+      if (!nameMatch) return false;
+      if (activeFilter === 'all') return true;
+      const cap = s.capacity || 1;
+      const avail = s.bikesAvailable ?? 0;
+      const ratio = avail / cap;
+      if (activeFilter === 'high') return ratio > 0.4;
+      if (activeFilter === 'low') return ratio > 0 && ratio <= 0.4;
+      if (activeFilter === 'empty') return avail === 0;
+      return true;
+    });
+  }
+
+  function renderList(stations) {
+    const list = document.getElementById('stationList');
+    const filtered = filterStations(stations);
+    document.getElementById('listCount').textContent = `${filtered.length} stanic`;
+
+    if (!filtered.length) {
+      list.innerHTML = `<div class="error-msg">Žádné stanice neodpovídají filtru.</div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map((s, i) => {
+      const cap = s.capacity || 10;
+      const avail = s.bikesAvailable ?? 0;
+      const pct = Math.round((avail / cap) * 100);
+      const [tagCls, tagLabel] = getTag(avail, cap);
+      const barColor = getBarColor(avail, cap);
+      return `
+        <div class="station-item ${selectedId === s.id ? 'selected' : ''}"
+             data-id="${s.id}" style="animation-delay:${i * 0.03}s"
+             onclick="selectStation('${s.id}')">
+          <div class="station-name">${s.name}</div>
+          <div class="station-meta">
+            <div class="bikes-bar-wrap">
+              <div class="bikes-bar" style="width:${pct}%;background:${barColor}"></div>
+            </div>
+            <span class="tag ${tagCls}">${tagLabel}</span>
+            <span class="bikes-count">${avail}/${cap}</span>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderMarkers(stations) {
+    // Remove old
+    Object.values(markers).forEach(m => m.remove());
+    markers = {};
+    stations.forEach(s => {
+      const m = L.marker([s.lat, s.lon], {
+        icon: createMarkerIcon(s.bikesAvailable, s.capacity)
+      }).addTo(map);
+
+      m.bindPopup(buildPopup(s), { maxWidth: 220 });
+      m.on('click', () => selectStation(s.id, false));
+      markers[s.id] = m;
+    });
+  }
+
+  function buildPopup(s) {
+    const avail = s.bikesAvailable ?? '–';
+    const docks = s.docksAvailable ?? '–';
+    return `<div class="popup-body">
+      <div class="popup-name">${s.name}</div>
+      <div class="popup-grid">
+        <div class="popup-stat">
+          <div class="popup-stat-val green">${avail}</div>
+          <div class="popup-stat-lbl">Kola</div>
+        </div>
+        <div class="popup-stat">
+          <div class="popup-stat-val gray">${docks}</div>
+          <div class="popup-stat-lbl">Stojany</div>
+        </div>
+      </div>
+      ${s.isRenting === false ? '<div class="popup-renting">⚠ Stanice dočasně mimo provoz</div>' : ''}
+    </div>`;
+  }
+
+  function selectStation(id, scroll = true) {
+    selectedId = id;
+    const s = allStations.find(x => x.id === id);
+    if (!s) return;
+
+    // Update list highlight
+    document.querySelectorAll('.station-item').forEach(el => {
+      el.classList.toggle('selected', el.dataset.id === id);
+    });
+
+    // Scroll item into view
+    if (scroll) {
+      const el = document.querySelector(`[data-id="${id}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Fly to marker & open popup
+    map.flyTo([s.lat, s.lon], 16, { duration: .8 });
+    if (markers[id]) {
+      setTimeout(() => markers[id].openPopup(), 500);
+    }
+  }
+
+  async function load() {
+    try {
+      const stations = await fetchStations();
+      const detailed = await loadAllDetails(stations);
+      allStations = detailed;
+
+      renderStats(detailed);
+      renderMarkers(detailed);
+      renderList(detailed);
+
+      const now = new Date();
+      document.getElementById('lastUpdate').textContent =
+        `Aktualizováno ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+    } catch (e) {
+      document.getElementById('stationList').innerHTML =
+        `<div class="error-msg">Nepodařilo se načíst data.<br>${e.message}</div>`;
+      document.getElementById('lastUpdate').textContent = 'Chyba načítání';
+    }
+  }
+
+  // Search
+  document.getElementById('search').addEventListener('input', e => {
+    searchTerm = e.target.value.toLowerCase().trim();
+    renderList(allStations);
+  });
+
+  // Filter chips
+  document.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter;
+      renderList(allStations);
+    });
+  });
+
+  // Refresh
+  document.getElementById('refreshBtn').addEventListener('click', () => {
+    detailCache = {};
+    document.getElementById('stationList').innerHTML =
+      `<div class="loading"><div class="spinner"></div>Načítám…</div>`;
+    load();
+  });
+
+  load();
+</script>
+</body>
+</html>
